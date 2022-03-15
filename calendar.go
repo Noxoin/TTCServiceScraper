@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
-	"strings"
+	"net/http"
+	"sync"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -15,10 +16,8 @@ import (
 	"google.golang.org/api/option"
 )
 
-var CALENDAR_ID = os.Getenv("CALENDAR_ID")
-var CLIENT_ID = os.Getenv("CLIENT_ID")
-var SECRETS_FILE = os.Getenv("SECRETS_FILE")
-var AUTHORIZATION = os.Getenv("AUTHORIZATION")
+var CALENDAR_ID = "0mrb23ks553ib8df82b3vcjpk4@group.calendar.google.com"
+var SECRETS_FILE = "client_secret.json"
 
 type CalendarService struct {
 	srv    *calendar.Service
@@ -33,15 +32,54 @@ func NewCalendarService(srv *calendar.Service, dryRun bool) *CalendarService {
 }
 
 func connectToCalendar(ctx context.Context) (*calendar.Service, error) {
-	conf := &oauth2.Config{
-		ClientID:     CLIENT_ID,
-		ClientSecret: readFile(SECRETS_FILE),
-		Scopes:       []string{"https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.events"},
-		Endpoint:     google.Endpoint,
+	conf, err := google.ConfigFromJSON([]byte(readFile(SECRETS_FILE)), "https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.events")
+	if err != nil {
+		log.Fatalf("unable to get oauth config: %v", err)
 	}
-	client := conf.Client(ctx, &oauth2.Token{
-		AccessToken: AUTHORIZATION,
+	state := "helloworldme"
+	url := conf.AuthCodeURL(state, oauth2.AccessTypeOffline)
+	fmt.Printf("Visit this URL in your browser:\n\n%s\n\n", url)
+	tok := make(chan *oauth2.Token)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	http.HandleFunc("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
+		defer wg.Done()
+
+		if s := r.URL.Query().Get("state"); s != state {
+			http.Error(w, fmt.Sprintf("Invalid state: %s", s), http.StatusUnauthorized)
+			return
+		}
+
+		code := r.URL.Query().Get("code")
+		token, err := conf.Exchange(ctx, code)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Exchange error: %s", err), http.StatusServiceUnavailable)
+			return
+		}
+
+		tokenJSON, err := json.MarshalIndent(token, "", "  ")
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Token parse error: %s", err), http.StatusServiceUnavailable)
+			return
+		}
+
+		w.Write(tokenJSON)
+		tok <- token
 	})
+	server := http.Server{
+		Addr: ":8080",
+	}
+	go func() {
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+			log.Fatalln(err)
+		}
+	}()
+	receivedToken := <-tok
+	wg.Wait()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalln(err)
+	}
+	client := conf.Client(ctx, receivedToken)
 	return calendar.NewService(ctx, option.WithHTTPClient(client))
 }
 
@@ -131,5 +169,5 @@ func readFile(filename string) string {
 	if err != nil {
 		log.Fatalf("Error reading %q: %v", filename, err)
 	}
-	return strings.TrimSpace(string(contents))
+	return string(contents)
 }
