@@ -184,7 +184,7 @@ func parseEffectiveDatesFromSubtitle(subtitle string) (time.Time, time.Time, err
 }
 
 func determineClosureType(title string) ClosureType {
-	if strings.Contains(title, "full weekend closure") || isSingleDayClosure(title) {
+	if strings.Contains(title, "weekend closure") || isSingleDayClosure(title) {
 		return FullDay
 	} else if strings.Contains(title, "nightly early closures") {
 		return NightOnly
