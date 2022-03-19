@@ -46,12 +46,14 @@ func (p *Prop) GetURL() (string, error) {
 }
 
 const PROPERTIES = `{"endpoint":"https://www.ttc.ca//sxa/search/results/","v":"{23DC07D4-6BAC-4B98-A9CC-07606C5B1322}","s":"{99D7699F-DB47-4BB1-8946-77561CE7B320}","l":"","p":10,"defaultSortOrder":"ContentDateFacet,Descending","sig":"","itemid":"{72CC555F-9128-4581-AD12-3D04AB1C87BA}","autoFireSearch":true}`
+const TTC_LANDING_URL = `https://www.ttc.ca/service-advisories/subway-service`
 
 func QueryTTCSubwayServiceLandingPageProperties(mock bool) (string, error) {
 	if mock {
 		return PROPERTIES, nil
 	}
-	resp, err := http.Get("https://www.ttc.ca/service-advisories/subway-service")
+	log.Printf("Visiting TTC page: %s\n", TTC_LANDING_URL)
+	resp, err := http.Get(TTC_LANDING_URL)
 	if err != nil {
 		fmt.Printf("Error in querying ttc page: %v", err)
 		return "", err

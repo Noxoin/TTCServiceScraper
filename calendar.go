@@ -113,7 +113,8 @@ func (c *CalendarService) insertCalendarEvent(ctx context.Context, event Event) 
 		log.Printf("Will send request: %v", calEvent)
 		return nil
 	}
-	_, err := c.srv.Events.Insert(CALENDAR_ID, calEvent).Do()
+	resp, err := c.srv.Events.Insert(CALENDAR_ID, calEvent).Do()
+	log.Printf("Added event: %s\n", resp.Summary)
 	return err
 }
 
